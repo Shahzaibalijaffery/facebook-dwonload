@@ -29,6 +29,26 @@ function extractVideoId(pageUrl) {
   }
 }
 
+// Only filter to a single video when on a specific reel page or reel section; on all other pages show all videos.
+function shouldFilterVideosByPage(pageUrl) {
+  if (!pageUrl) return false;
+  try {
+    const u = new URL(pageUrl);
+    const host = (u.hostname || "").toLowerCase();
+    if (
+      host !== "facebook.com" &&
+      host !== "www.facebook.com" &&
+      !host.endsWith(".facebook.com")
+    )
+      return false;
+    const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+    // Filter only on: /reel/<id> or /reel (reel section)
+    return /^\/reel\/\d+$/.test(path) || /^\/reel\/?$/.test(path);
+  } catch {
+    return false;
+  }
+}
+
 // ─── Per-Tab Storage ──────────────────────────────────────────
 
 function getTab(tabId) {
@@ -124,9 +144,9 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
     return;
   }
 
-  // Popup requesting video data
+  // Popup or content script requesting video data (content script may omit tabId → use sender tab)
   if (req.action === "getVideoData") {
-    const tabId = req.tabId;
+    const tabId = req.tabId ?? sender?.tab?.id;
     if (!tabId) {
       sendResponse({ videos: [] });
       return true;
@@ -141,13 +161,17 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
 
         let videos = Object.values(data.videos || {});
         const pageVid = extractVideoId(tab.url);
+        const filterByPage = shouldFilterVideosByPage(tab.url);
 
-        if (pageVid) {
-          const f = videos.filter((v) => v.videoId === pageVid);
-          if (f.length) videos = f;
-        } else if (data.activeVideoId) {
-          const f = videos.filter((v) => v.videoId === data.activeVideoId);
-          if (f.length) videos = f;
+        // Only filter to one video on specific reel page (/reel/<id>) or reel section (/reel/); on all other pages show all videos.
+        if (filterByPage) {
+          if (pageVid) {
+            const f = videos.filter((v) => v.videoId === pageVid);
+            if (f.length) videos = f;
+          } else if (data.activeVideoId) {
+            const f = videos.filter((v) => v.videoId === data.activeVideoId);
+            if (f.length) videos = f;
+          }
         }
 
         sendResponse({ videos });
@@ -170,7 +194,22 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
         filename: req.filename || "facebook_video.mp4",
         saveAs: true,
       },
-      (id) => sendResponse({ downloadId: id }),
+      (id) => {
+        // Fire in-page toast on the originating tab (when available)
+        const tabId = req.tabId ?? sender?.tab?.id;
+        if (tabId && chrome.tabs) {
+          try {
+            chrome.tabs.sendMessage(tabId, {
+              action: "fbShowDownloadNotification",
+              filename: req.filename || "Facebook Video",
+              quality: req.quality || "",
+            });
+          } catch (e) {
+            // ignore; tab may no longer exist
+          }
+        }
+        sendResponse({ downloadId: id });
+      },
     );
     return true;
   }

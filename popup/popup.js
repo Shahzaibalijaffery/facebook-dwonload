@@ -43,10 +43,11 @@ function render(videos) {
       return qOrder(b.quality) - qOrder(a.quality);
     });
 
-    // Deduplicate by quality label
+    // Deduplicate by quality label and only show progressive URLs in the UI
     const unique = [];
     const seen = new Set();
     for (const u of sorted) {
+      if (u.type !== "progressive") continue; // hide DASH/other types in popup list
       const key = u.quality + "-" + u.type;
       if (!seen.has(key)) { seen.add(key); unique.push(u); }
     }
@@ -62,9 +63,9 @@ function render(videos) {
     const dur = video.duration ? formatDuration(video.duration) : "";
 
     const dropdownItems = unique.map(u => {
-      const label = u.type === "progressive"
-        ? `${u.quality} (with audio)`
-        : `${u.quality} (video only)`;
+      const isAudio = /(\.m4a($|\?)|\.aac($|\?)|\.mp3($|\?)|\.ogg($|\?)|\/audio\/)/i.test(u.url || "");
+      const suffix = isAudio ? " (audio)" : " (video)";
+      const label = `${u.quality}${suffix}`;
       return `<div class="quality-menu-item${u === best ? " selected" : ""}" data-url="${esc(u.url)}" data-quality="${u.quality}" data-type="${u.type}">${label}</div>`;
     }).join("");
 
@@ -121,9 +122,33 @@ function bindEvents(el) {
 
   el.querySelectorAll(".quality-menu-item").forEach(item =>
     item.addEventListener("click", () => {
-      downloadVideo(item.dataset.url, item.dataset.quality);
-      item.closest(".quality-dropdown-menu").classList.remove("show");
-      item.closest(".video-item").classList.remove("dropdown-open");
+      // Selecting a quality should NOT auto-download.
+      // It should update the main Download button (and Copy button) for this card.
+      const card = item.closest(".video-item");
+      if (!card) return;
+
+      // Update selected styling
+      card.querySelectorAll(".quality-menu-item.selected").forEach(s => s.classList.remove("selected"));
+      item.classList.add("selected");
+
+      const url = item.dataset.url;
+      const quality = item.dataset.quality;
+
+      const downloadBtn = card.querySelector(".download-btn");
+      if (downloadBtn) {
+        downloadBtn.dataset.url = url;
+        downloadBtn.dataset.quality = quality;
+        downloadBtn.textContent = `⬇ Download ${quality}`;
+      }
+
+      const typeBadge = card.querySelector(".video-type");
+      if (typeBadge) typeBadge.textContent = quality;
+
+      const copyBtn = card.querySelector(".copy-btn");
+      if (copyBtn) copyBtn.dataset.url = url;
+
+      item.closest(".quality-dropdown-menu")?.classList.remove("show");
+      card.classList.remove("dropdown-open");
     })
   );
 
@@ -139,6 +164,7 @@ function downloadVideo(url, quality) {
   chrome.runtime.sendMessage({
     action: "download",
     url,
+    quality,
     filename: `Facebook Video - ${quality}.mp4`,
   });
 }

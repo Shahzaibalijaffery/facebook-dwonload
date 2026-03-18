@@ -19,6 +19,17 @@
       "matches": ["*://*.facebook.com/*", "*://*.fb.com/*"],
       "js": ["content/bridge.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.facebook.com/*", "*://*.fb.com/*"],
+      "js": ["content/reel-download-button.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.facebook.com/*", "*://*.fb.com/*"],
+      "css": ["content/downloadNotifications.css"],
+      "js": ["content/downloadNotifications.js"],
+      "run_at": "document_idle"
     }
   ],
   "action": {

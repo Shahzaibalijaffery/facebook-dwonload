@@ -15,15 +15,31 @@
     }
   }
 
-  // Reel document API: response of GET https://www.facebook.com/reel/1208391874833205 (HTML)
+  // Reel document API: /reel, /reel/, /reel/1208391874833205 (HTML)
   function isReelDocumentUrl(url) {
     if (!isFbOrigin(url)) return false;
     try {
-      const path = new URL(url, window.location.origin).pathname.replace(/\/+$/, "");
-      return /^\/reel\/\d+$/.test(path.toLowerCase());
+      const path = new URL(url, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+      return /^\/reel(\/\d+)?$/.test(path.toLowerCase());
     } catch {
       return false;
     }
+  }
+
+  // Main Facebook page: www.facebook.com or www.facebook.com/
+  function isFbMainPageUrl(url) {
+    if (!isFbOrigin(url)) return false;
+    try {
+      const path = new URL(url, window.location.origin).pathname.replace(/\/+$/, "") || "/";
+      return path === "/" || path === "";
+    } catch {
+      return false;
+    }
+  }
+
+  // Any URL we want to process as HTML for video extraction (reel + main page)
+  function isFbDocumentUrlToProcess(url) {
+    return isReelDocumentUrl(url) || isFbMainPageUrl(url);
   }
 
   // Brace-matched extraction of enclosing JSON object from string (handles nested strings).
@@ -126,7 +142,7 @@
       const url = typeof args[0] === "string" ? args[0] : args[0]?.url;
       if (url && url.includes(GQL)) {
         res.clone().text().then(processResponse).catch(() => {});
-      } else if (url && isReelDocumentUrl(url)) {
+      } else if (url && isFbDocumentUrlToProcess(url)) {
         res.clone().text().then((text) => processReelDocumentResponse(url, text)).catch(() => {});
       }
     } catch {}
@@ -148,7 +164,7 @@
       this.addEventListener("load", function () {
         try { processResponse(this.responseText); } catch {}
       });
-    } else if (url && isReelDocumentUrl(url)) {
+    } else if (url && isFbDocumentUrlToProcess(url)) {
       this.addEventListener("load", function () {
         try { processReelDocumentResponse(url, this.responseText); } catch {}
       });
@@ -202,10 +218,10 @@
     }
   }
 
-  // When we're on a reel page, get video data from (1) fetch of URL and (2) already-loaded DOM as fallback.
-  function runReelExtraction() {
+  // When we're on a reel page or main Facebook page, get video data from (1) fetch of URL and (2) already-loaded DOM as fallback.
+  function runPageExtraction() {
     const url = window.location.href;
-    if (!isReelDocumentUrl(url)) return;
+    if (!isFbDocumentUrlToProcess(url)) return;
     fetch(url, { credentials: "include", redirect: "follow" })
       .then((r) => r.text())
       .then((text) => processReelDocumentResponse(url, text))
@@ -219,9 +235,9 @@
     }, 2500);
   }
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", runReelExtraction);
+    document.addEventListener("DOMContentLoaded", runPageExtraction);
   } else {
-    runReelExtraction();
+    runPageExtraction();
   }
 
   // ─── Process GraphQL response text ──────────────────────────

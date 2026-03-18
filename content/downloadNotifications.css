@@ -1,0 +1,108 @@
+/* Facebook download notifications (adapted from tiktokDownloader). */
+
+#fb-downloader-notifications {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 999999;
+  width: 360px;
+  max-width: 400px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+  #fb-downloader-notifications {
+    width: calc(100vw - 40px) !important;
+    max-width: calc(100vw - 40px) !important;
+    left: 20px !important;
+    right: 20px !important;
+    bottom: 20px !important;
+  }
+}
+
+@keyframes fb-notif-slideInUp {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fb-notif-slideOutDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+}
+
+.fb-notification-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 14px 16px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fb-notification-card.fb-notif-anim-in {
+  animation: fb-notif-slideInUp 0.25s ease-out;
+}
+
+.fb-notification-card.fb-notif-anim-out {
+  animation: fb-notif-slideOutDown 0.25s ease-out forwards;
+}
+
+.fb-notification-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fb-notification-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.fb-notification-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.fb-notification-title {
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.fb-notification-filename {
+  font-size: 12px;
+  opacity: 0.9;
+  word-break: break-word;
+}
+
+.fb-notification-quality {
+  opacity: 0.9;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
