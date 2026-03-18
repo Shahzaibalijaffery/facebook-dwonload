@@ -12,7 +12,9 @@
 
   function isReelPage() {
     try {
-      const path = (new URL(window.location.href).pathname || "/").replace(/\/+$/, "") || "/";
+      const path =
+        (new URL(window.location.href).pathname || "/").replace(/\/+$/, "") ||
+        "/";
       return /^\/reel(\/\d+)?$/.test(path);
     } catch {
       return false;
@@ -21,7 +23,9 @@
 
   function getReelIdFromUrl() {
     try {
-      const path = (new URL(window.location.href).pathname || "/").replace(/\/+$/, "") || "/";
+      const path =
+        (new URL(window.location.href).pathname || "/").replace(/\/+$/, "") ||
+        "/";
       const m = path.match(/^\/reel\/(\d+)$/);
       return m ? m[1] : null;
     } catch {
@@ -35,9 +39,15 @@
       cur = cur.parentElement;
       if (!cur || cur.children.length < 4) continue;
       const children = [...cur.children];
-      const hasLike = children.some((c) => c.querySelector('[aria-label="Like"]'));
-      const hasComment = children.some((c) => c.querySelector('[aria-label="Comment"]'));
-      const hasShare = children.some((c) => c.querySelector('[aria-label="Share"]'));
+      const hasLike = children.some((c) =>
+        c.querySelector('[aria-label="Like"]'),
+      );
+      const hasComment = children.some((c) =>
+        c.querySelector('[aria-label="Comment"]'),
+      );
+      const hasShare = children.some((c) =>
+        c.querySelector('[aria-label="Share"]'),
+      );
       if (hasLike && hasComment && hasShare) return cur;
     }
     return null;
@@ -151,17 +161,20 @@
   function createDownloadButtonWithMenu() {
     const wrapper = document.createElement("div");
     wrapper.setAttribute(INJECT_ATTR, "1");
-    wrapper.className = "x9f619 x1n2onr6 x1ja2u2z x78zum5 xdt5ytf x2lah0s x193iq5w xzboxd6 x14l7nz5";
+    wrapper.className =
+      "x9f619 x1n2onr6 x1ja2u2z x78zum5 xdt5ytf x2lah0s x193iq5w xzboxd6 x14l7nz5";
     wrapper.classList.add("fb-dl-wrapper");
 
     const span = document.createElement("span");
-    span.className = "html-span xdj266r x14z9mp xat24cr x1lziwak xexx8yu xyri2b x18d9i69 x1c1uobl x1hl2dhg x16tdsg8 x1vvkbs x4k7w5x x1h91t0o x1h9r5lt x1jfb8zj xv2umb2 x1beo9mf xaigb6o x12ejxvf x3igimt xarpa2k xedcshv x1lytzrv x1t2pt76 x7ja8zs x1qrby5j";
+    span.className =
+      "html-span xdj266r x14z9mp xat24cr x1lziwak xexx8yu xyri2b x18d9i69 x1c1uobl x1hl2dhg x16tdsg8 x1vvkbs x4k7w5x x1h91t0o x1h9r5lt x1jfb8zj xv2umb2 x1beo9mf xaigb6o x12ejxvf x3igimt xarpa2k xedcshv x1lytzrv x1t2pt76 x7ja8zs x1qrby5j";
 
     const btn = document.createElement("div");
     btn.setAttribute("aria-label", "Download");
     btn.setAttribute("role", "button");
     btn.setAttribute("tabindex", "0");
-    btn.className = "x1i10hfl x1qjc9v5 xjbqb8w xjqpnuy xc5r6h4 xqeqjp1 x1phubyo x13fuv20 x18b5jzi x1q0q8m5 x1t7ytsu x972fbf x10w94by x1qhh985 x14e42zd x9f619 x1ypdohk xdl72j9 x2lah0s x3ct3a4 xdj266r x14z9mp xat24cr x1lziwak x2lwn1j xeuugli xexx8yu xyri2b x18d9i69 x1c1uobl x1n2onr6 x16tdsg8 x1hl2dhg x1ja2u2z x1t137rt x1fmog5m xu25z0z x140muxe xo1y3bh x3nfvp2 x1q0g3np x87ps6o x1lku1pv x1a2a7pz x1useyqa";
+    btn.className =
+      "x1i10hfl x1qjc9v5 xjbqb8w xjqpnuy xc5r6h4 xqeqjp1 x1phubyo x13fuv20 x18b5jzi x1q0q8m5 x1t7ytsu x972fbf x10w94by x1qhh985 x14e42zd x9f619 x1ypdohk xdl72j9 x2lah0s x3ct3a4 xdj266r x14z9mp xat24cr x1lziwak x2lwn1j xeuugli xexx8yu xyri2b x18d9i69 x1c1uobl x1n2onr6 x16tdsg8 x1hl2dhg x1ja2u2z x1t137rt x1fmog5m xu25z0z x140muxe xo1y3bh x3nfvp2 x1q0g3np x87ps6o x1lku1pv x1a2a7pz x1useyqa";
     btn.style.cursor = "pointer";
 
     btn.innerHTML = `
@@ -191,7 +204,18 @@
   }
 
   function qOrder(q) {
-    const map = { "1080p": 10, HD: 9, "720p": 8, "480p": 7, "360p": 6, "270p": 5, "240p": 4, SD: 3, "180p": 2, MP4: 1 };
+    const map = {
+      "1080p": 10,
+      HD: 9,
+      "720p": 8,
+      "480p": 7,
+      "360p": 6,
+      "270p": 5,
+      "240p": 4,
+      SD: 3,
+      "180p": 2,
+      MP4: 1,
+    };
     return map[q] ?? 0;
   }
 
@@ -268,7 +292,9 @@
       item.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
-        const safeTitle = (title || "Facebook Video").replace(/[\\/:*?"<>|]/g, "_").slice(0, 80);
+        const safeTitle = (title || "Facebook Video")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .slice(0, 80);
         chrome.runtime.sendMessage({
           action: "download",
           url: u.url,
@@ -383,8 +409,12 @@
   function wireUrlChangeHandlers() {
     const fire = () => {
       // Close any open menus on navigation
-      document.querySelectorAll(".fb-dl-menu." + MENU_OPEN_CLASS).forEach((m) => m.classList.remove(MENU_OPEN_CLASS));
-      document.querySelectorAll(".fb-dl-wrapper." + MENU_OPEN_CLASS).forEach((w) => w.classList.remove(MENU_OPEN_CLASS));
+      document
+        .querySelectorAll(".fb-dl-menu." + MENU_OPEN_CLASS)
+        .forEach((m) => m.classList.remove(MENU_OPEN_CLASS));
+      document
+        .querySelectorAll(".fb-dl-wrapper." + MENU_OPEN_CLASS)
+        .forEach((w) => w.classList.remove(MENU_OPEN_CLASS));
       mountedBar = null;
       // Re-mount on new reel UI (SPA)
       scheduleMount();
@@ -416,10 +446,14 @@
   observer.observe(document.body, { childList: true, subtree: true });
 
   // Scrolling between reels often changes which action bar is centered
-  window.addEventListener("scroll", () => {
-    if (!isReelPage()) return;
-    scheduleMount();
-  }, { passive: true });
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (!isReelPage()) return;
+      scheduleMount();
+    },
+    { passive: true },
+  );
   window.addEventListener("resize", () => {
     if (!isReelPage()) return;
     scheduleMount();
