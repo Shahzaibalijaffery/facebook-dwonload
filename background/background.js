@@ -3,6 +3,53 @@
 
 const videoData = {}; // tabId → { videos: {videoId: {...}}, activeVideoId }
 
+// ─── Download progress notifications ─────────────────────────
+const downloadMeta = {}; // chrome.downloads id -> { tabId, filename, quality }
+
+// MP3 conversion is handled in a hidden extension runner page
+
+// For MP3 downloads started from the runner page:
+// chrome download id -> runner tab id. We close the runner tab when the download completes.
+const closeRunnerByDownloadId = {}; // downloadId -> runnerTabId
+
+// ─── MP3 Runner Tab (hidden) ────────────────────────────────────
+let ffmpegRunnerTabId = null;
+const ffmpegRunnerReadyQueue = [];
+
+function ensureFfmpegRunnerTab() {
+  return new Promise((resolve) => {
+    if (ffmpegRunnerTabId != null) {
+      chrome.tabs.get(ffmpegRunnerTabId, (tab) => {
+        if (tab && !chrome.runtime.lastError) {
+          resolve(ffmpegRunnerTabId);
+          return;
+        }
+        ffmpegRunnerTabId = null;
+        ffmpegRunnerReadyQueue.push(resolve);
+        chrome.tabs.create(
+          { url: chrome.runtime.getURL("ffmpeg-runner.html"), active: false },
+          (t) => {
+            if (t && t.id) {
+              // Runner will also send runnerReady; resolve is handled there.
+              // We still keep ffmpegRunnerTabId updated as a best-effort.
+              ffmpegRunnerTabId = t.id;
+            }
+          },
+        );
+      });
+      return;
+    }
+
+    ffmpegRunnerReadyQueue.push(resolve);
+    chrome.tabs.create(
+      { url: chrome.runtime.getURL("ffmpeg-runner.html"), active: false },
+      (t) => {
+        if (t && t.id) ffmpegRunnerTabId = t.id;
+      },
+    );
+  });
+}
+
 // ─── URL Helpers ──────────────────────────────────────────────
 
 function extractVideoId(pageUrl) {
@@ -125,6 +172,40 @@ function updateBadge(tabId) {
 // ─── Message Handler ──────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
+  // Runner handshake: runner page tells us it's ready to accept jobs.
+  if (req && req.type === "runnerReady") {
+    const tabId = sender?.tab?.id;
+    if (tabId != null) ffmpegRunnerTabId = tabId;
+    while (ffmpegRunnerReadyQueue.length) {
+      const r = ffmpegRunnerReadyQueue.shift();
+      try {
+        r(ffmpegRunnerTabId);
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  // Runner reports a downloadId so we can close its tab on completion.
+  if (req && req.type === "runnerDownloadStarted") {
+    const runnerTabId = sender?.tab?.id;
+    const downloadId = req.downloadId;
+    if (runnerTabId != null && downloadId != null) {
+      closeRunnerByDownloadId[downloadId] = runnerTabId;
+    }
+    return false;
+  }
+
+  // Runner reports an unrecoverable failure; close immediately.
+  if (req && req.type === "runnerJobFailed") {
+    const runnerTabId = sender?.tab?.id;
+    if (runnerTabId != null) {
+      try {
+        chrome.tabs.remove(runnerTabId, function () {});
+      } catch (_) {}
+    }
+    return false;
+  }
+
   if (req.action === "ping") {
     sendResponse({ ok: true });
     return;
@@ -188,6 +269,55 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
 
   // Download request from popup
   if (req.action === "download") {
+    const tabId = req.tabId ?? sender?.tab?.id;
+
+    // FFmpeg conversion: convert selected progressive mp4 to mp3, then download.
+    if (req.convertToMp3 === true) {
+      if (!tabId) {
+        sendResponse({ ok: false, reason: "no tab" });
+        return true;
+      }
+
+      const operationId = Date.now() + Math.floor(Math.random() * 1000000);
+
+      const runnerFilename = req.filename || "Facebook Video - MP3.mp3";
+      const runnerQuality = req.quality || "MP3";
+
+      ensureFfmpegRunnerTab()
+        .then((rid) => {
+          if (rid == null) throw new Error("FFmpeg runner tab missing");
+          chrome.tabs.sendMessage(rid, {
+            action: "runFFmpeg",
+            operationId,
+            targetTabId: tabId,
+            url: req.url,
+            filename: runnerFilename,
+            quality: runnerQuality,
+            format: "mp3",
+          });
+        })
+        .catch((e) => {
+          try {
+            chrome.tabs.sendMessage(tabId, {
+              action: "fbDownloadProgress",
+              downloadId: operationId,
+              filename: runnerFilename,
+              quality: runnerQuality,
+              progress: 0,
+              status: `failed: ${(e && e.message) || String(e)}`,
+            });
+          } catch (_) {}
+        });
+
+      sendResponse({
+        ok: true,
+        downloadId: null,
+        convertToMp3: true,
+        operationId,
+      });
+      return true;
+    }
+
     chrome.downloads.download(
       {
         url: req.url,
@@ -195,25 +325,105 @@ chrome.runtime.onMessage.addListener((req, sender, sendResponse) => {
         saveAs: true,
       },
       (id) => {
-        // Fire in-page toast on the originating tab (when available)
-        const tabId = req.tabId ?? sender?.tab?.id;
-        if (tabId && chrome.tabs) {
+        if (id == null) {
+          sendResponse({ downloadId: id });
+          return;
+        }
+
+        // Track download meta for progress notifications.
+        if (tabId != null) {
+          downloadMeta[id] = {
+            tabId,
+            filename: req.filename || "Facebook Video",
+            quality: req.quality || "",
+          };
+          // Initial notification card bound to the real downloadId.
           try {
             chrome.tabs.sendMessage(tabId, {
               action: "fbShowDownloadNotification",
+              downloadId: id,
               filename: req.filename || "Facebook Video",
               quality: req.quality || "",
             });
-          } catch (e) {
-            // ignore; tab may no longer exist
-          }
+          } catch {}
         }
+
         sendResponse({ downloadId: id });
       },
     );
     return true;
   }
 });
+
+// ─── Download progress forwarding ─────────────────────────────
+if (chrome.downloads && chrome.downloads.onChanged) {
+  chrome.downloads.onChanged.addListener((delta) => {
+    const downloadId = delta.id;
+    if (downloadId == null) return;
+    const meta = downloadMeta[downloadId];
+    const runnerTabId = closeRunnerByDownloadId[downloadId];
+
+    // If this download is a normal MP4/HLS download, forward progress to the right tab.
+    if (meta) {
+      const tabId = meta.tabId;
+
+      chrome.downloads.search({ id: downloadId }, (items) => {
+        if (chrome.runtime.lastError || !items || !items.length) return;
+        const item = items[0];
+
+        const totalBytes =
+          item.totalBytes != null ? item.totalBytes : undefined;
+        const bytesReceived =
+          item.bytesReceived != null ? item.bytesReceived : undefined;
+
+        let progress = 0;
+        if (
+          typeof totalBytes === "number" &&
+          totalBytes > 0 &&
+          typeof bytesReceived === "number" &&
+          bytesReceived >= 0
+        ) {
+          progress = Math.max(
+            0,
+            Math.min(100, Math.round((bytesReceived / totalBytes) * 100)),
+          );
+        }
+
+        const status = item.state || "";
+
+        try {
+          chrome.tabs.sendMessage(tabId, {
+            action: "fbDownloadProgress",
+            downloadId,
+            filename: meta.filename,
+            quality: meta.quality,
+            progress,
+            status,
+          });
+        } catch {}
+
+        if (status && status !== "in_progress") {
+          delete downloadMeta[downloadId];
+        }
+      });
+    }
+
+    // Close runner tab after the MP3 conversion's download completes.
+    if (runnerTabId != null) {
+      const state = delta.state?.current || delta.state?.previous || "";
+      if (
+        state === "complete" ||
+        state === "interrupted" ||
+        state === "canceled"
+      ) {
+        delete closeRunnerByDownloadId[downloadId];
+        try {
+          chrome.tabs.remove(runnerTabId, function () {});
+        } catch (_) {}
+      }
+    }
+  });
+}
 
 // ─── Tab Lifecycle ────────────────────────────────────────────
 

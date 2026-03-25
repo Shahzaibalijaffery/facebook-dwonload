@@ -85,6 +85,7 @@ function render(videos, force = false) {
 
     if (!unique.length) return;
     const best = unique[0];
+    const lowest = unique[unique.length - 1];
 
     const card = document.createElement("div");
     card.className = "video-item";
@@ -99,6 +100,11 @@ function render(videos, force = false) {
       const label = `${u.quality}${suffix}`;
       return `<div class="quality-menu-item${u === best ? " selected" : ""}" data-url="${esc(u.url)}" data-quality="${u.quality}" data-type="${u.type}">${label}</div>`;
     }).join("");
+
+    const mp3Item =
+      lowest && lowest.url
+        ? `<div class="quality-menu-item" data-url="${esc(lowest.url)}" data-quality="MP3" data-convert-to-mp3="1">MP3</div>`
+        : "";
 
     card.innerHTML = `
       ${video.thumbnail ? `<div class="video-thumb"><img src="${esc(video.thumbnail)}" alt="" /></div>` : ""}
@@ -118,7 +124,7 @@ function render(videos, force = false) {
           <button class="download-dropdown-btn">
             <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="white" stroke-width="2" fill="none"/></svg>
           </button>
-          <div class="quality-dropdown-menu">${dropdownItems}</div>` : ""}
+          <div class="quality-dropdown-menu">${dropdownItems}${mp3Item}</div>` : ""}
         </div>
         <button class="copy-btn" data-url="${esc(best.url)}">📋 Copy</button>
       </div>`;
@@ -131,7 +137,13 @@ function render(videos, force = false) {
 
 function bindEvents(el) {
   el.querySelectorAll(".download-btn").forEach(btn =>
-    btn.addEventListener("click", () => downloadVideo(btn.dataset.url, btn.dataset.quality))
+    btn.addEventListener("click", () =>
+      downloadVideo(
+        btn.dataset.url,
+        btn.dataset.quality,
+        btn.dataset.convertToMp3 === "1"
+      )
+    )
   );
 
   el.querySelectorAll(".copy-btn").forEach(btn =>
@@ -164,11 +176,13 @@ function bindEvents(el) {
 
       const url = item.dataset.url;
       const quality = item.dataset.quality;
+      const convertToMp3 = item.dataset.convertToMp3 === "1";
 
       const downloadBtn = card.querySelector(".download-btn");
       if (downloadBtn) {
         downloadBtn.dataset.url = url;
         downloadBtn.dataset.quality = quality;
+        downloadBtn.dataset.convertToMp3 = convertToMp3 ? "1" : "";
         downloadBtn.textContent = `⬇ Download ${quality}`;
       }
 
@@ -191,12 +205,16 @@ function bindEvents(el) {
   });
 }
 
-function downloadVideo(url, quality) {
+function downloadVideo(url, quality, convertToMp3 = false) {
   chrome.runtime.sendMessage({
     action: "download",
+    tabId,
     url,
     quality,
-    filename: `Facebook Video - ${quality}.mp4`,
+    convertToMp3,
+    filename: convertToMp3
+      ? `Facebook Video - MP3.mp3`
+      : `Facebook Video - ${quality}.mp4`,
   });
 }
 

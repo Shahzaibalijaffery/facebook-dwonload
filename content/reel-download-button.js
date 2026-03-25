@@ -274,6 +274,7 @@
       menu.appendChild(empty);
       return;
     }
+    const lowest = items[items.length - 1];
     for (const u of items) {
       const item = document.createElement("div");
       item.className = "fb-dl-item";
@@ -302,6 +303,37 @@
         });
       });
       menu.appendChild(item);
+    }
+
+    // MP3 option (convert from lowest quality progressive file)
+    if (lowest && lowest.url) {
+      const mp3Item = document.createElement("div");
+      mp3Item.className = "fb-dl-item";
+      mp3Item.setAttribute("role", "option");
+      const left = document.createElement("span");
+      left.textContent = "MP3";
+      mp3Item.appendChild(left);
+      const tag = document.createElement("span");
+      tag.className = "fb-dl-tag";
+      tag.textContent = "CONVERT";
+      mp3Item.appendChild(tag);
+
+      mp3Item.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const safeTitle = (title || "Facebook Video")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .slice(0, 80);
+        chrome.runtime.sendMessage({
+          action: "download",
+          url: lowest.url,
+          quality: "MP3",
+          convertToMp3: true,
+          filename: `${safeTitle} - MP3.mp3`,
+        });
+      });
+
+      menu.appendChild(mp3Item);
     }
   }
 
