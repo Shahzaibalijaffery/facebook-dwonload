@@ -85,6 +85,28 @@ body {
   padding: 16px;
 }
 
+.filter-wrap {
+  padding: 12px 16px 0;
+}
+
+.title-filter-input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #d7d7d7;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: #333;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.title-filter-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
 .video-item {
   background: #ffffff;
   border: 1px solid #e8e8e8;

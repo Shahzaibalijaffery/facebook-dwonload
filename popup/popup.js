@@ -1,24 +1,45 @@
 let tabId = null;
 let refreshTimer = null;
 let lastHash = "";
+let allVideos = [];
+let titleFilterQuery = "";
 
 chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
   if (!tabs?.[0]) return;
   tabId = tabs[0].id;
+  initTitleFilter();
   loadVideos();
   refreshTimer = setInterval(loadVideos, 1500);
 });
 
-function loadVideos() {
-  chrome.runtime.sendMessage({ action: "getVideoData", tabId }, res => {
-    if (chrome.runtime.lastError || !res) return;
-    render(res.videos || []);
+function initTitleFilter() {
+  const input = document.getElementById("titleFilterInput");
+  if (!input) return;
+  input.addEventListener("input", () => {
+    titleFilterQuery = (input.value || "").trim().toLowerCase();
+    render(allVideos, true);
   });
 }
 
-function render(videos) {
-  const hash = videos.map(v => v.videoId + v.urls.length).join("|");
-  if (hash === lastHash) return;
+function loadVideos() {
+  chrome.runtime.sendMessage({ action: "getVideoData", tabId }, res => {
+    if (chrome.runtime.lastError || !res) return;
+    allVideos = res.videos || [];
+    render(allVideos);
+  });
+}
+
+function render(videos, force = false) {
+  const filteredVideos = titleFilterQuery
+    ? videos.filter(v => {
+        const t = (v.title || "").toLowerCase();
+        const a = (v.author || "").toLowerCase();
+        return t.includes(titleFilterQuery) || a.includes(titleFilterQuery);
+      })
+    : videos;
+
+  const hash = `${titleFilterQuery}|` + filteredVideos.map(v => v.videoId + v.urls.length).join("|");
+  if (!force && hash === lastHash) return;
   lastHash = hash;
 
   const el = document.getElementById("videoList");
@@ -33,9 +54,19 @@ function render(videos) {
     return;
   }
 
+  if (!filteredVideos.length) {
+    el.innerHTML = `
+      <div class="no-videos">
+        <div class="no-videos-icon">🔎</div>
+        <h3>No Matching Videos</h3>
+        <p>Try a different title keyword.</p>
+      </div>`;
+    return;
+  }
+
   el.innerHTML = "";
 
-  videos.forEach(video => {
+  filteredVideos.forEach(video => {
     // Sort: progressive first (has audio), then DASH by quality desc
     const sorted = [...video.urls].sort((a, b) => {
       if (a.type === "progressive" && b.type !== "progressive") return -1;
