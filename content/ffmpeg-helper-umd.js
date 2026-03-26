@@ -1,5 +1,4 @@
-// Runs in MAIN world (non-module script) and exposes window.FFmpegHelper.
-// Copied from TikTokDownloader's ffmpeg-helper-umd.js for MP3 conversion.
+// Runs in extension runner page and exposes window.FFmpegHelper.
 (function (t, d) {
   typeof exports == "object" && typeof module < "u"
     ? (module.exports = d())

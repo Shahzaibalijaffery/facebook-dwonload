@@ -17,18 +17,21 @@
     });
   }
 
-  function ensureTikTokFFmpegReady(timeoutMs = 20000) {
+  function ensureFacebookFFmpegReady(timeoutMs = 20000) {
     const start = Date.now();
     return new Promise((resolve, reject) => {
       const tick = () => {
         try {
-          if (window.TikTokFFmpeg && typeof window.TikTokFFmpeg.handleOperation === "function") {
+          if (
+            window.FacebookFFmpeg &&
+            typeof window.FacebookFFmpeg.handleOperation === "function"
+          ) {
             resolve();
             return;
           }
         } catch (_) {}
         if (Date.now() - start >= timeoutMs) {
-          reject(new Error("TikTokFFmpeg not available"));
+          reject(new Error("FacebookFFmpeg not available"));
           return;
         }
         setTimeout(tick, 100);
@@ -80,7 +83,7 @@
     const sourceBuffer = await fetchAsArrayBuffer(url);
     safeLog("fetched source bytes", sourceBuffer?.byteLength || 0);
 
-    await ensureTikTokFFmpegReady();
+    await ensureFacebookFFmpegReady();
 
     return new Promise((resolve, reject) => {
       let done = false;
@@ -94,11 +97,11 @@
       const onMessage = (ev) => {
         const d = ev && ev.data;
         if (!d || d.operationId !== operationId) return;
-        if (d.type === "TIKTOK_FFMPEG_PROGRESS") {
+        if (d.type === "FACEBOOK_FFMPEG_PROGRESS") {
           sendProgress(targetTabId, operationId, filename, quality, d.progress, d.status);
           return;
         }
-        if (d.type === "TIKTOK_FFMPEG_RESULT") {
+        if (d.type === "FACEBOOK_FFMPEG_RESULT") {
           cleanup();
           resolve(d);
         }
@@ -107,7 +110,7 @@
       const onError = (ev) => {
         const d = ev && ev.data;
         if (!d || d.operationId !== operationId) return;
-        if (d.type === "TIKTOK_FFMPEG_ERROR") {
+        if (d.type === "FACEBOOK_FFMPEG_ERROR") {
           cleanup();
           reject(new Error(d.error || "FFmpeg conversion failed"));
         }
@@ -116,7 +119,7 @@
       window.addEventListener("message", onMessage);
       window.addEventListener("message", onError);
 
-      window.TikTokFFmpeg.handleOperation(operationId, {
+      window.FacebookFFmpeg.handleOperation(operationId, {
         videoData: sourceBuffer,
         format,
         filename,

@@ -1,5 +1,5 @@
 // Injects an icon-only Download button into the Facebook reel action bar.
-// Clicking the icon toggles a quality dropdown (similar to tiktokDownloader reference).
+// Clicking the icon toggles a quality dropdown.
 // Runs in ISOLATED world; only on reel pages.
 
 (function () {

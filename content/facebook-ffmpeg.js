@@ -1,9 +1,8 @@
-// Runs in MAIN world and exposes window.TikTokFFmpeg.
-// Copied from TikTokDownloader's tiktok-ffmpeg.js for MP3 conversion.
+// Runs in extension runner page and exposes window.FacebookFFmpeg.
 (function () {
   "use strict";
 
-  if (window.TikTokFFmpeg) return;
+  if (window.FacebookFFmpeg) return;
 
   const FFMPEG_HELPER_URL = "https://helper.addoncrop.com/?build=full";
 
@@ -15,30 +14,16 @@
 
   function detectContainerFormat(buf) {
     if (!buf || buf.length < 8) return CONTAINER.UNKNOWN;
-    if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70)
-      return CONTAINER.MP4;
-    if (
-      buf.length >= 12 &&
-      buf[8] === 0x66 &&
-      buf[9] === 0x74 &&
-      buf[10] === 0x79 &&
-      buf[11] === 0x70
-    )
-      return CONTAINER.MP4;
+    if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return CONTAINER.MP4;
+    if (buf.length >= 12 && buf[8] === 0x66 && buf[9] === 0x74 && buf[10] === 0x79 && buf[11] === 0x70) return CONTAINER.MP4;
     if (buf[0] === 0x47) return CONTAINER.MPEG_TS;
     return CONTAINER.UNKNOWN;
   }
 
   function notifyProgress(operationId, status, progress, message) {
     window.postMessage(
-      {
-        type: "TIKTOK_FFMPEG_PROGRESS",
-        operationId,
-        status,
-        progress,
-        message: message || "",
-      },
-      "*"
+      { type: "FACEBOOK_FFMPEG_PROGRESS", operationId, status, progress, message: message || "" },
+      "*",
     );
   }
 
@@ -57,25 +42,16 @@
         }, 15000);
       });
     }
-
     var ffmpeg = new window.FFmpegHelper(FFMPEG_HELPER_URL, "error");
     if (!ffmpeg.iframe) throw new Error("FFmpeg helper iframe not created");
     await ffmpeg.Ready;
     return ffmpeg;
   }
 
-  async function convertVideoToAudio(
-    videoArrayBuffer,
-    format,
-    bitrate,
-    ffmpegInstance,
-    operationId
-  ) {
+  async function convertVideoToAudio(videoArrayBuffer, format, bitrate, ffmpegInstance, operationId) {
     var cleanBitrate = (bitrate || "192k").replace(/\s+/g, "");
     var uint8Array = new Uint8Array(videoArrayBuffer);
-
     if (uint8Array.length === 0) throw new Error("Empty video buffer");
-
     var safeId = operationId || Date.now();
     var inputFilename = "video_" + safeId + ".mp4";
     var outputFilename = "output_" + safeId + "." + format;
@@ -88,23 +64,12 @@
     } catch (e) {}
 
     var ffmpegArgs = [
-      "-i",
-      inputFilename,
-      "-vn",
-      "-map",
-      "0:a:0",
-      "-c:a",
-      format === "mp3"
-        ? "libmp3lame"
-        : format === "aac"
-        ? "aac"
-        : "flac",
-      "-b:a",
-      cleanBitrate,
-      "-filter:a",
-      "volume=1",
-      "-f",
-      format,
+      "-i", inputFilename,
+      "-vn", "-map", "0:a:0",
+      "-c:a", format === "mp3" ? "libmp3lame" : format === "aac" ? "aac" : "flac",
+      "-b:a", cleanBitrate,
+      "-filter:a", "volume=1",
+      "-f", format,
       outputFilename,
     ];
 
@@ -117,7 +82,7 @@
       "exec",
       { args: ffmpegArgs, files: { [inputFilename]: fileData }, outputFilename: outputFilename },
       [fileData.buffer],
-      null
+      null,
     );
 
     try {
@@ -133,19 +98,14 @@
       var ab = outputBuffer.buffer;
       return ab.byteLength === outputBuffer.byteLength
         ? ab
-        : ab.slice(
-            outputBuffer.byteOffset,
-            outputBuffer.byteOffset + outputBuffer.byteLength
-          );
+        : ab.slice(outputBuffer.byteOffset, outputBuffer.byteOffset + outputBuffer.byteLength);
     }
     return outputBuffer;
   }
 
   async function convertToMp4(uint8Array, ffmpegInstance, operationId) {
     var detected = detectContainerFormat(uint8Array);
-    var inputExt =
-      detected === CONTAINER.MPEG_TS || detected === CONTAINER.UNKNOWN ? "ts" : "mpg";
-
+    var inputExt = (detected === CONTAINER.MPEG_TS || detected === CONTAINER.UNKNOWN) ? "ts" : "mpg";
     var safeId = operationId != null ? operationId : Date.now();
     var inputFilename = "input_" + safeId + "." + inputExt;
     var outputFilename = "output_" + safeId + ".mp4";
@@ -162,23 +122,13 @@
     var fileData = new Uint8Array(uint8Array.length);
     fileData.set(uint8Array);
 
-    var ffmpegArgs = [
-      "-i",
-      inputFilename,
-      "-c",
-      "copy",
-      "-movflags",
-      "+faststart",
-      "-f",
-      "mp4",
-      outputFilename,
-    ];
+    var ffmpegArgs = ["-i", inputFilename, "-c", "copy", "-movflags", "+faststart", "-f", "mp4", outputFilename];
 
     var result = await ffmpegInstance.run(
       "exec",
       { args: ffmpegArgs, files: { [inputFilename]: fileData }, outputFilename: outputFilename },
       [fileData.buffer],
-      null
+      null,
     );
 
     try {
@@ -208,23 +158,13 @@
     var filename = data && data.filename;
 
     if (!videoData) {
-      window.postMessage(
-        { type: "TIKTOK_FFMPEG_ERROR", operationId, error: "No video data" },
-        "*"
-      );
+      window.postMessage({ type: "FACEBOOK_FFMPEG_ERROR", operationId, error: "No video data" }, "*");
       return;
     }
 
     var buffer = toOwnedUint8Array(videoData);
     if (!buffer || buffer.length === 0) {
-      window.postMessage(
-        {
-          type: "TIKTOK_FFMPEG_ERROR",
-          operationId,
-          error: "Invalid or empty video data",
-        },
-        "*"
-      );
+      window.postMessage({ type: "FACEBOOK_FFMPEG_ERROR", operationId, error: "Invalid or empty video data" }, "*");
       return;
     }
 
@@ -236,15 +176,9 @@
       var container = detectContainerFormat(buffer);
       if (container === CONTAINER.MP4) {
         window.postMessage(
-          {
-            type: "TIKTOK_FFMPEG_RESULT",
-            operationId,
-            processedData: buffer.buffer,
-            filename: outFilename,
-            mimeType: "video/mp4",
-          },
+          { type: "FACEBOOK_FFMPEG_RESULT", operationId, processedData: buffer.buffer, filename: outFilename, mimeType: "video/mp4" },
           "*",
-          [buffer.buffer]
+          [buffer.buffer],
         );
         return;
       }
@@ -253,29 +187,17 @@
         if (operationId != null) notifyProgress(operationId, "converting", 0, "Initializing FFmpeg...");
         var ffmpegInstance = await getFFmpegInstance();
         var mp4Buffer = await convertToMp4(buffer, ffmpegInstance, operationId);
-
         window.postMessage(
-          {
-            type: "TIKTOK_FFMPEG_RESULT",
-            operationId,
-            processedData: mp4Buffer,
-            filename: outFilename,
-            mimeType: "video/mp4",
-          },
+          { type: "FACEBOOK_FFMPEG_RESULT", operationId, processedData: mp4Buffer, filename: outFilename, mimeType: "video/mp4" },
           "*",
-          [mp4Buffer]
+          [mp4Buffer],
         );
       } catch (err) {
         window.postMessage(
-          {
-            type: "TIKTOK_FFMPEG_ERROR",
-            operationId,
-            error: (err && err.message) || String(err),
-          },
-          "*"
+          { type: "FACEBOOK_FFMPEG_ERROR", operationId, error: (err && err.message) || String(err) },
+          "*",
         );
       }
-
       return;
     }
 
@@ -283,62 +205,34 @@
       notifyProgress(operationId, "converting", 0, "Initializing FFmpeg...");
       var inst = await getFFmpegInstance();
       notifyProgress(operationId, "converting", 10, "Converting to audio...");
-      var audioArrayBuffer = await convertVideoToAudio(
-        buffer,
-        (format || "mp3").toLowerCase(),
-        "192k",
-        inst,
-        operationId
-      );
-
-      var outName =
-        filename && !filename.toLowerCase().endsWith(".mp3")
-          ? filename.replace(/\.[^.]+$/, "") + ".mp3"
-          : filename || "audio.mp3";
+      var audioArrayBuffer = await convertVideoToAudio(buffer, (format || "mp3").toLowerCase(), "192k", inst, operationId);
+      var outName = (filename && !filename.toLowerCase().endsWith(".mp3")) ? filename.replace(/\.[^.]+$/, "") + ".mp3" : (filename || "audio.mp3");
 
       window.postMessage(
-        {
-          type: "TIKTOK_FFMPEG_RESULT",
-          operationId,
-          processedData: audioArrayBuffer,
-          filename: outName,
-          mimeType: "audio/mpeg",
-        },
+        { type: "FACEBOOK_FFMPEG_RESULT", operationId, processedData: audioArrayBuffer, filename: outName, mimeType: "audio/mpeg" },
         "*",
-        [audioArrayBuffer]
+        [audioArrayBuffer],
       );
     } catch (err) {
       window.postMessage(
-        {
-          type: "TIKTOK_FFMPEG_ERROR",
-          operationId,
-          error: (err && err.message) || String(err),
-        },
-        "*"
+        { type: "FACEBOOK_FFMPEG_ERROR", operationId, error: (err && err.message) || String(err) },
+        "*",
       );
     }
   }
 
-  window.TikTokFFmpeg = { handleOperation: handleOperation, getFFmpegInstance: getFFmpegInstance };
+  window.FacebookFFmpeg = { handleOperation: handleOperation, getFFmpegInstance: getFFmpegInstance };
 
   window.addEventListener("message", function (event) {
-    if (event.source !== window || !event.data || event.data.type !== "TIKTOK_FFMPEG_OPERATION") return;
+    if (event.source !== window || !event.data || event.data.type !== "FACEBOOK_FFMPEG_OPERATION") return;
     var operationId = event.data.operationId;
     var data = event.data.data;
-
     if (data && data.error) {
-      window.postMessage(
-        { type: "TIKTOK_FFMPEG_ERROR", operationId, error: data.error },
-        "*"
-      );
+      window.postMessage({ type: "FACEBOOK_FFMPEG_ERROR", operationId, error: data.error }, "*");
       return;
     }
-
     handleOperation(operationId, data || {}).catch(function (err) {
-      window.postMessage(
-        { type: "TIKTOK_FFMPEG_ERROR", operationId, error: (err && err.message) || String(err) },
-        "*"
-      );
+      window.postMessage({ type: "FACEBOOK_FFMPEG_ERROR", operationId, error: (err && err.message) || String(err) }, "*");
     });
   });
 })();
