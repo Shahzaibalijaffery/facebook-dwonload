@@ -85,27 +85,58 @@ function fbRenderOrUpdate(downloadId, filename, quality, progress, status) {
   const qual = quality ? fbEscapeHtml(quality) : "";
   const qualHtml = qual ? `<span class="fb-notification-quality">${qual}</span>` : "";
 
-  const statusLine =
-    status && (isFailed || s.includes("failed") || s.includes("error") || s.includes("starting") || s.includes("converting"))
-      ? `<div class="fb-notification-status">${fbEscapeHtml(status)}</div>`
-      : "";
-
-  const progressBarHtml =
-    pct != null
-      ? `<div class="fb-notification-progress-wrap"><div class="fb-notification-progress-fill" style="width:${pct}%"></div></div><div class="fb-notification-progress-pct">${pct}%</div>`
-      : "";
-
-  card.innerHTML = `
-    <div class="fb-notification-header">
-      <span class="fb-notification-icon">${icon}</span>
-      <div class="fb-notification-body">
-        <div class="fb-notification-title">${fbEscapeHtml(titleText)}${qualHtml}</div>
-        <div class="fb-notification-filename">${fbEscapeHtml(filename || "Facebook Video")}</div>
+  // Avoid flicker: build the card DOM once, then update text/width only.
+  if (!card.dataset.fbNotifInit) {
+    card.dataset.fbNotifInit = "1";
+    card.innerHTML = `
+      <div class="fb-notification-header">
+        <span class="fb-notification-icon"></span>
+        <div class="fb-notification-body">
+          <div class="fb-notification-title"></div>
+          <div class="fb-notification-filename"></div>
+        </div>
       </div>
-    </div>
-    ${statusLine}
-    ${progressBarHtml}
-  `;
+      <div class="fb-notification-status" style="display:none"></div>
+      <div class="fb-notification-progress-row">
+        <div class="fb-notification-progress-wrap">
+          <div class="fb-notification-progress-fill" style="width:0%"></div>
+        </div>
+        <div class="fb-notification-progress-pct">0%</div>
+      </div>
+    `;
+  }
+
+  const iconEl = card.querySelector(".fb-notification-icon");
+  if (iconEl) iconEl.textContent = icon;
+
+  const titleEl = card.querySelector(".fb-notification-title");
+  if (titleEl) titleEl.innerHTML = `${fbEscapeHtml(titleText)}${qualHtml}`;
+
+  const fileEl = card.querySelector(".fb-notification-filename");
+  if (fileEl) fileEl.textContent = String(filename || "Facebook Video");
+
+  const statusEl = card.querySelector(".fb-notification-status");
+  const shouldShowStatus =
+    !!status &&
+    (isFailed ||
+      s.includes("failed") ||
+      s.includes("error") ||
+      s.includes("starting") ||
+      s.includes("converting"));
+  if (statusEl) {
+    if (shouldShowStatus) {
+      statusEl.style.display = "";
+      statusEl.textContent = String(status);
+    } else {
+      statusEl.style.display = "none";
+      statusEl.textContent = "";
+    }
+  }
+
+  const fillEl = card.querySelector(".fb-notification-progress-fill");
+  if (fillEl) fillEl.style.width = `${pct}%`;
+  const pctEl = card.querySelector(".fb-notification-progress-pct");
+  if (pctEl) pctEl.textContent = `${pct}%`;
 
   if (isComplete || isFailed) {
     setTimeout(() => {

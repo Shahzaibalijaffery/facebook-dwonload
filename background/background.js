@@ -8,6 +8,9 @@ const downloadMeta = {}; // chrome.downloads id -> { tabId, filename, quality }
 
 // MP3 conversion is handled in a hidden extension runner page
 
+// Chrome MV3 uses chrome.action; Firefox MV2 uses chrome.browserAction.
+const actionApi = chrome.action || chrome.browserAction;
+
 // For MP3 downloads started from the runner page:
 // chrome download id -> runner tab id. We close the runner tab when the download completes.
 const closeRunnerByDownloadId = {}; // downloadId -> runnerTabId
@@ -27,7 +30,7 @@ function ensureFfmpegRunnerTab() {
         ffmpegRunnerTabId = null;
         ffmpegRunnerReadyQueue.push(resolve);
         chrome.tabs.create(
-          { url: chrome.runtime.getURL("ffmpeg-runner.html"), active: false },
+          { url: chrome.runtime.getURL("ffmpeg/runner.html"), active: false },
           (t) => {
             if (t && t.id) {
               // Runner will also send runnerReady; resolve is handled there.
@@ -42,7 +45,7 @@ function ensureFfmpegRunnerTab() {
 
     ffmpegRunnerReadyQueue.push(resolve);
     chrome.tabs.create(
-      { url: chrome.runtime.getURL("ffmpeg-runner.html"), active: false },
+      { url: chrome.runtime.getURL("ffmpeg/runner.html"), active: false },
       (t) => {
         if (t && t.id) ffmpegRunnerTabId = t.id;
       },
@@ -164,9 +167,9 @@ function restore(tabId, cb) {
 function updateBadge(tabId) {
   const tab = videoData[tabId];
   const count = tab ? Object.keys(tab.videos).length : 0;
-  chrome.action.setBadgeText({ text: count > 0 ? String(count) : "", tabId });
-  if (count > 0)
-    chrome.action.setBadgeBackgroundColor({ color: "#667eea", tabId });
+  if (!actionApi) return;
+  actionApi.setBadgeText({ text: count > 0 ? String(count) : "", tabId });
+  if (count > 0) actionApi.setBadgeBackgroundColor({ color: "#667eea", tabId });
 }
 
 // ─── Message Handler ──────────────────────────────────────────

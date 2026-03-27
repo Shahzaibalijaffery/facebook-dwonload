@@ -275,6 +275,12 @@
       return;
     }
     const lowest = items[items.length - 1];
+    const closeCurrentMenu = () => {
+      const wrapper = menu.closest(".fb-dl-wrapper");
+      if (wrapper) closeMenu(menu, wrapper);
+      else menu.classList.remove(MENU_OPEN_CLASS);
+    };
+
     for (const u of items) {
       const item = document.createElement("div");
       item.className = "fb-dl-item";
@@ -292,6 +298,7 @@
       item.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        closeCurrentMenu();
         const safeTitle = (title || "Facebook Video")
           .replace(/[\\/:*?"<>|]/g, "_")
           .slice(0, 80);
@@ -321,6 +328,7 @@
       mp3Item.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        closeCurrentMenu();
         const safeTitle = (title || "Facebook Video")
           .replace(/[\\/:*?"<>|]/g, "_")
           .slice(0, 80);

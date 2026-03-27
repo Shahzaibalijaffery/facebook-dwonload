@@ -27,6 +27,17 @@
     );
   }
 
+  function clampPct(n) {
+    if (typeof n !== "number" || !isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  function mapPct(inPct, outMin, outMax) {
+    const p = clampPct(inPct) / 100;
+    const v = outMin + p * (outMax - outMin);
+    return clampPct(v);
+  }
+
   async function getFFmpegInstance() {
     if (typeof window.FFmpegHelper === "undefined") {
       return new Promise(function (resolve, reject) {
@@ -73,7 +84,7 @@
       outputFilename,
     ];
 
-    if (operationId) notifyProgress(operationId, "converting", 30, "Running FFmpeg...");
+    if (operationId) notifyProgress(operationId, "converting", 10, "Preparing audio conversion...");
 
     var fileData = new Uint8Array(uint8Array.length);
     fileData.set(uint8Array);
@@ -82,7 +93,12 @@
       "exec",
       { args: ffmpegArgs, files: { [inputFilename]: fileData }, outputFilename: outputFilename },
       [fileData.buffer],
-      null,
+      operationId
+        ? function (p) {
+            // Helper reports 0..100. Map to a smoother 10..95 range.
+            notifyProgress(operationId, "converting", mapPct(p, 10, 95), "Converting to MP3...");
+          }
+        : null,
     );
 
     try {
@@ -117,7 +133,7 @@
       }
     } catch (e) {}
 
-    if (operationId != null) notifyProgress(operationId, "converting", 20, "Converting to MP4...");
+    if (operationId != null) notifyProgress(operationId, "converting", 10, "Preparing MP4 conversion...");
 
     var fileData = new Uint8Array(uint8Array.length);
     fileData.set(uint8Array);
@@ -128,7 +144,11 @@
       "exec",
       { args: ffmpegArgs, files: { [inputFilename]: fileData }, outputFilename: outputFilename },
       [fileData.buffer],
-      null,
+      operationId
+        ? function (p) {
+            notifyProgress(operationId, "converting", mapPct(p, 10, 95), "Converting...");
+          }
+        : null,
     );
 
     try {

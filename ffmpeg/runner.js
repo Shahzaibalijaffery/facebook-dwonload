@@ -10,11 +10,71 @@
     } catch (_) {}
   }
 
-  function fetchAsArrayBuffer(url) {
-    return fetch(url, { credentials: "omit", cache: "no-store" }).then((r) => {
-      if (!r.ok) throw new Error(`Failed to fetch MP4: ${r.status}`);
-      return r.arrayBuffer();
-    });
+  function clampPct(n) {
+    if (typeof n !== "number" || !isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  }
+
+  async function probeContentLength(url) {
+    try {
+      const head = await fetch(url, {
+        method: "HEAD",
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!head || !head.ok) return undefined;
+      const len = Number(head.headers.get("content-length"));
+      if (!Number.isFinite(len) || len <= 0) return undefined;
+      return len;
+    } catch (_) {
+      return undefined;
+    }
+  }
+
+  async function fetchAsArrayBuffer(url, onProgress) {
+    const headSize = await probeContentLength(url);
+    const r = await fetch(url, { credentials: "omit", cache: "no-store" });
+    if (!r.ok) throw new Error(`Failed to fetch MP4: ${r.status}`);
+
+    const totalStr = r.headers && r.headers.get ? r.headers.get("content-length") : null;
+    const total = totalStr ? Number(totalStr) : NaN;
+    const hasTotal = Number.isFinite(total) && total > 0;
+    const resolvedTotal = hasTotal ? total : headSize;
+    const hasResolvedTotal = Number.isFinite(resolvedTotal) && resolvedTotal > 0;
+
+    if (!r.body || !r.body.getReader) {
+      const full = await r.arrayBuffer();
+      if (onProgress) onProgress(100, full.byteLength, hasResolvedTotal ? resolvedTotal : undefined);
+      return full;
+    }
+
+    const reader = r.body.getReader();
+    const chunks = [];
+    let received = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      chunks.push(value);
+      received += value.byteLength;
+      if (onProgress) {
+        if (hasResolvedTotal) {
+          onProgress((received / resolvedTotal) * 100, received, resolvedTotal);
+        } else {
+          onProgress(undefined, received, undefined);
+        }
+      }
+    }
+
+    const out = new Uint8Array(received);
+    let offset = 0;
+    for (const c of chunks) {
+      out.set(c, offset);
+      offset += c.byteLength;
+    }
+    if (onProgress) onProgress(100, received, hasResolvedTotal ? resolvedTotal : undefined);
+    return out.buffer;
   }
 
   function ensureFacebookFFmpegReady(timeoutMs = 20000) {
@@ -44,7 +104,11 @@
     if (!tabId) return;
     try {
       chrome.tabs.sendMessage(tabId, message, () => {
-        // ignore tab errors (navigated/closed)
+        // Suppress expected errors when the source tab was closed/navigated.
+        // Reading lastError prevents "Unchecked runtime.lastError" noise.
+        if (chrome.runtime && chrome.runtime.lastError) {
+          // no-op
+        }
       });
     } catch (_) {}
   }
@@ -78,15 +142,43 @@
     const format = request.format || "mp3";
 
     showStarted(targetTabId, operationId, filename, quality);
-    sendProgress(targetTabId, operationId, filename, quality, 0, "converting");
+    sendProgress(targetTabId, operationId, filename, quality, 0, "Downloading source...");
 
-    const sourceBuffer = await fetchAsArrayBuffer(url);
+    const sourceBuffer = await fetchAsArrayBuffer(url, (downloadPct, received, total) => {
+      // Real network progress for source MP4 download: map to 0..90.
+      if (typeof downloadPct === "number") {
+        const pct = clampPct((downloadPct * 90) / 100);
+        sendProgress(
+          targetTabId,
+          operationId,
+          filename,
+          quality,
+          pct,
+          `Downloading source... ${pct}%`,
+        );
+      } else {
+        const mb = (received / (1024 * 1024)).toFixed(1);
+        const totalMb = total ? (total / (1024 * 1024)).toFixed(1) : null;
+        sendProgress(
+          targetTabId,
+          operationId,
+          filename,
+          quality,
+          0,
+          totalMb
+            ? `Downloading source... ${mb}/${totalMb} MB`
+            : `Downloading source... ${mb} MB`,
+        );
+      }
+    });
     safeLog("fetched source bytes", sourceBuffer?.byteLength || 0);
 
     await ensureFacebookFFmpegReady();
+    sendProgress(targetTabId, operationId, filename, quality, 90, "Converting to MP3...");
 
     return new Promise((resolve, reject) => {
       let done = false;
+
       const cleanup = () => {
         if (done) return;
         done = true;
@@ -98,7 +190,12 @@
         const d = ev && ev.data;
         if (!d || d.operationId !== operationId) return;
         if (d.type === "FACEBOOK_FFMPEG_PROGRESS") {
-          sendProgress(targetTabId, operationId, filename, quality, d.progress, d.status);
+          // Real conversion progress only: map helper 0..100 to 90..99.
+          const helperPct = typeof d.progress === "number" ? clampPct(d.progress) : 0;
+          const convPct = clampPct(90 + (helperPct * 9) / 100);
+          const statusText =
+            (d.message && String(d.message)) || d.status || "Converting to MP3...";
+          sendProgress(targetTabId, operationId, filename, quality, convPct, statusText);
           return;
         }
         if (d.type === "FACEBOOK_FFMPEG_RESULT") {
